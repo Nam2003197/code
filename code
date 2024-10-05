@@ -1,0 +1,68 @@
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+
+import java.io.IOException;
+
+public class ElectricityMapper extends Mapper<Object, Text, Text, IntWritable> {
+    public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+        // Đọc một dòng từ file dữ liệu
+        String line = value.toString();
+        
+        // Tách các phần tử trong dòng
+        String[] fields = line.split("\\s+");
+        
+        // Năm là phần tử đầu tiên
+        String year = fields[0];
+        
+        // Giá trị trung bình là phần tử cuối cùng
+        int average = Integer.parseInt(fields[fields.length - 1]);
+        
+        // Ghi ra output cặp key-value: năm và giá trị trung bình
+        context.write(new Text(year), new IntWritable(average));
+    }
+}
+
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Reducer;
+
+import java.io.IOException;
+
+public class ElectricityReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+    public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+        // Giả định chỉ có một giá trị cho mỗi năm
+        for (IntWritable val : values) {
+            if (val.get() > 30) {
+                context.write(key, val);
+            }
+        }
+    }
+}
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class ElectricityMain {
+    public static void main(String[] args) throws Exception {
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "electricity average filter");
+
+        job.setJarByClass(ElectricityMain.class);
+        job.setMapperClass(ElectricityMapper.class);
+        job.setReducerClass(ElectricityReducer.class);
+
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(IntWritable.class);
+
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
+}
